@@ -445,6 +445,154 @@ function runTest(mobileView) {
       await expect(el.menu.optionActive.value).to.equal('apple');
       await expect(el.menu.optionActive.textContent.trim()).to.equal('Apple');
     });
+
+    it('matches multi-character typeahead against option text', async () => {
+      const el = await fixture(html`
+        <auro-select>
+          <span slot="bib.fullscreen.headline">Bib Headline</span>
+          <span slot="label">Name</span>
+          <auro-menu>
+            <auro-menuoption value="apple">Apple</auro-menuoption>
+            <auro-menuoption value="apricot">Apricot</auro-menuoption>
+            <auro-menuoption value="banana">Banana</auro-menuoption>
+          </auro-menu>
+        </auro-select>
+      `);
+
+      await elementUpdated(el);
+
+      // Type "ap" quickly — should match "Apple" (first match for "ap")
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }));
+      await elementUpdated(el);
+
+      await expect(el.menu.optionActive).to.exist;
+      await expect(el.menu.optionActive.value).to.equal('apple');
+
+      // Wait for buffer to reset
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Type "apr" to narrow to "Apricot"
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'p' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'r' }));
+      await elementUpdated(el);
+
+      await expect(el.menu.optionActive).to.exist;
+      await expect(el.menu.optionActive.value).to.equal('apricot');
+    });
+
+    it('resets typeahead buffer after timeout', async () => {
+      const el = await fixture(html`
+        <auro-select>
+          <span slot="bib.fullscreen.headline">Bib Headline</span>
+          <span slot="label">Name</span>
+          <auro-menu>
+            <auro-menuoption value="apple">Apple</auro-menuoption>
+            <auro-menuoption value="banana">Banana</auro-menuoption>
+          </auro-menu>
+        </auro-select>
+      `);
+
+      await elementUpdated(el);
+
+      // Type "a" — matches Apple
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('apple');
+
+      // Wait for buffer to reset (default 500ms)
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Now type "b" — should match Banana (not "ab" which would match nothing)
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('banana');
+    });
+
+    it('transitions from repeated char cycling to multi-char search after buffer reset', async () => {
+      const el = await fixture(html`
+        <auro-select>
+          <span slot="bib.fullscreen.headline">Bib Headline</span>
+          <span slot="label">Name</span>
+          <auro-menu>
+            <auro-menuoption value="apple">Apple</auro-menuoption>
+            <auro-menuoption value="apricot">Apricot</auro-menuoption>
+            <auro-menuoption value="banana">Banana</auro-menuoption>
+          </auro-menu>
+        </auro-select>
+      `);
+
+      await elementUpdated(el);
+
+      // Press "a" twice to cycle (Apple -> Apricot)
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('apple');
+
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('apricot');
+
+      // Wait for buffer to reset
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      // Now type "ba" for multi-char search — should match Banana
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('banana');
+    });
+
+    it('ignores non-printable keys', async () => {
+      const el = await fixture(html`
+        <auro-select>
+          <span slot="bib.fullscreen.headline">Bib Headline</span>
+          <span slot="label">Name</span>
+          <auro-menu>
+            <auro-menuoption value="apple">Apple</auro-menuoption>
+          </auro-menu>
+        </auro-select>
+      `);
+
+      await elementUpdated(el);
+
+      // Non-printable keys should not trigger typeahead
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Shift' }));
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Control' }));
+      await elementUpdated(el);
+
+      // No active option should be set
+      await expect(el.menu.optionActive).to.not.exist;
+    });
+
+    it('respects custom typeaheadTimeoutMs', async () => {
+      const el = await fixture(html`
+        <auro-select typeaheadTimeoutMs="100">
+          <span slot="bib.fullscreen.headline">Bib Headline</span>
+          <span slot="label">Name</span>
+          <auro-menu>
+            <auro-menuoption value="apple">Apple</auro-menuoption>
+            <auro-menuoption value="banana">Banana</auro-menuoption>
+          </auro-menu>
+        </auro-select>
+      `);
+
+      await elementUpdated(el);
+
+      // Type "a"
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('apple');
+
+      // Wait just past the custom short timeout
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      // Buffer should have reset — "b" should match Banana, not "ab"
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: 'b' }));
+      await elementUpdated(el);
+      await expect(el.menu.optionActive.value).to.equal('banana');
+    });
   });
 }
 

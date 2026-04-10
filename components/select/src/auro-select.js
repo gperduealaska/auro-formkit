@@ -93,6 +93,19 @@ export class AuroSelect extends AuroElement {
     /**
      * @private
      */
+    this.typeaheadBuffer = '';
+
+    /**
+     * @private
+     */
+    this.typeaheadTimeout = null;
+
+    const defaultTypeaheadTimeoutMs = 500;
+    this.typeaheadTimeoutMs = defaultTypeaheadTimeoutMs;
+
+    /**
+     * @private
+     */
     this.validation = new AuroFormValidation();
 
     /**
@@ -271,6 +284,17 @@ export class AuroSelect extends AuroElement {
        */
       noValidate: {
         type: Boolean,
+        reflect: true
+      },
+
+      /**
+       * Sets the timeout (in milliseconds) for the typeahead search buffer.
+       * After this period of inactivity, the buffer resets. Increase for users
+       * who need more time between keystrokes.
+       * @default 500
+       */
+      typeaheadTimeoutMs: {
+        type: Number,
         reflect: true
       },
 
@@ -703,10 +727,11 @@ export class AuroSelect extends AuroElement {
 
     this.menu.addEventListener('auroMenu-activatedOption', (evt) => {
       if (evt.detail) {
+        // Use instant scroll to prevent lag during rapid typeahead key sequences
         evt.detail.scrollIntoView({
           alignToTop: false,
           block: "nearest",
-          behavior: "smooth"
+          behavior: "instant"
         });
       }
     });
@@ -790,40 +815,72 @@ export class AuroSelect extends AuroElement {
 
   /**
    * Updates the active option in the menu based on keyboard input.
+   * Supports full typeahead: typing multiple characters quickly accumulates
+   * a search buffer that matches against option text. The buffer resets
+   * after a period of inactivity. When a single character is repeated,
+   * it cycles through options starting with that character.
    * @private
    * @param {string} _key - The key pressed by the user.
    * @returns {void}
    */
   updateActiveOptionBasedOnKey(_key) {
+    // Ignore non-printable keys
+    if (_key.length !== 1) {
+      return;
+    }
 
-    // Get a lowercase version of the key pressed
+    // Use the menu's own items array for consistent indexing
+    const items = this.menu ? this.menu.items : [];
+    if (!items.length) {
+      return;
+    }
+
     const key = _key.toLowerCase();
 
-    // Calculate how many times the same letter has been pressed
-    this.sameLetterTimes = key === this.lastLetter ? this.sameLetterTimes + 1 : 0;
+    // Clear any existing typeahead timeout
+    if (this.typeaheadTimeout) {
+      clearTimeout(this.typeaheadTimeout);
+    }
 
-    // Set last letter for tracking
-    this.lastLetter = key;
+    this.typeaheadBuffer += key;
 
-    // Get all the options that start with the last letter pressed
-    const letterOptions = this.options.filter((option) => {
-      const optionText = option.value || '';
-      return optionText.toLowerCase().startsWith(this.lastLetter);
-    });
+    // Set timeout to clear the buffer after inactivity
+    this.typeaheadTimeout = setTimeout(() => {
+      this.typeaheadBuffer = '';
+      this.typeaheadTimeout = null;
+    }, this.typeaheadTimeoutMs);
 
-    // If we have options that match the letter pressed
-    if (letterOptions.length) {
+    // Check if the user is repeating the same single character (e.g., pressing "s" multiple times)
+    const isRepeatedChar = this.typeaheadBuffer.length > 1 &&
+      new Set(this.typeaheadBuffer).size === 1;
 
-      // Show the dropdown if it is not already visible
-      this.dropdown.show();
+    /**
+     * Gets the visible display text for a menu item.
+     * Uses innerText to get rendered text, avoiding hidden elements and extra whitespace.
+     * @param {HTMLElement} item - The menu option element.
+     * @returns {string} - The lowercase display text.
+     */
+    const getDisplayText = (item) => (item.innerText || item.textContent || '').trim().toLowerCase();
 
-      // Get the index we're after based on how many times the letter has been pressed and the length of the letterOptions array
-      const index = this.sameLetterTimes < letterOptions.length ? this.sameLetterTimes : this.sameLetterTimes % letterOptions.length;
+    if (isRepeatedChar) {
+      // Cycle through items that start with this character
+      const matchingItems = items.filter((item) => getDisplayText(item).startsWith(key));
 
-      // Select the new option in the menu
-      const newOption = letterOptions[index];
-      const newOptionIndex = this.options.indexOf(newOption);
-      this.menu.updateActiveOption(newOptionIndex);
+      if (matchingItems.length) {
+        this.dropdown.show();
+
+        const cycleIndex = (this.typeaheadBuffer.length - 1) % matchingItems.length;
+        const matchedItem = matchingItems[cycleIndex];
+        this.menu.updateActiveOption(items.indexOf(matchedItem));
+      }
+    } else {
+      // Multi-character typeahead: match against the full buffer
+      const matchIndex = items.findIndex((item) => getDisplayText(item).startsWith(this.typeaheadBuffer));
+
+      if (matchIndex >= 0) {
+        this.dropdown.show();
+        this.menu.updateActiveOption(matchIndex);
+      }
     }
   }
 
