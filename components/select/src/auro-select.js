@@ -93,6 +93,19 @@ export class AuroSelect extends AuroElement {
     /**
      * @private
      */
+    this.typeaheadBuffer = '';
+
+    /**
+     * @private
+     */
+    this.typeaheadTimeout = null;
+
+    const defaultTypeaheadTimeoutMs = 500;
+    this.typeaheadTimeoutMs = defaultTypeaheadTimeoutMs;
+
+    /**
+     * @private
+     */
     this.validation = new AuroFormValidation();
 
     /**
@@ -271,6 +284,17 @@ export class AuroSelect extends AuroElement {
        */
       noValidate: {
         type: Boolean,
+        reflect: true
+      },
+
+      /**
+       * Sets the timeout (in milliseconds) for the typeahead search buffer.
+       * After this period of inactivity, the buffer resets. Increase for users
+       * who need more time between keystrokes.
+       * @default 500
+       */
+      typeaheadTimeoutMs: {
+        type: Number,
         reflect: true
       },
 
@@ -703,6 +727,7 @@ export class AuroSelect extends AuroElement {
 
     this.menu.addEventListener('auroMenu-activatedOption', (evt) => {
       if (evt.detail) {
+        // Use instant scroll to prevent lag during rapid typeahead key sequences
         evt.detail.scrollIntoView({
           alignToTop: false,
           block: "nearest",
@@ -811,15 +836,10 @@ export class AuroSelect extends AuroElement {
     }
 
     const key = _key.toLowerCase();
-    const typeaheadTimeoutMs = 500;
 
     // Clear any existing typeahead timeout
     if (this.typeaheadTimeout) {
       clearTimeout(this.typeaheadTimeout);
-    }
-
-    if (!this.typeaheadBuffer) {
-      this.typeaheadBuffer = '';
     }
 
     this.typeaheadBuffer += key;
@@ -828,7 +848,7 @@ export class AuroSelect extends AuroElement {
     this.typeaheadTimeout = setTimeout(() => {
       this.typeaheadBuffer = '';
       this.typeaheadTimeout = null;
-    }, typeaheadTimeoutMs);
+    }, this.typeaheadTimeoutMs);
 
     // Check if the user is repeating the same single character (e.g., pressing "s" multiple times)
     const isRepeatedChar = this.typeaheadBuffer.length > 1 &&

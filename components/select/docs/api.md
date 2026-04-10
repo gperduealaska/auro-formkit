@@ -30,6 +30,7 @@ The auro-select element is a wrapper for auro-dropdown and auro-menu to create a
 | `setCustomValidity`             | `setCustomValidity`             | `string`                          |                | Sets a custom help text message to display for all validityStates. |
 | `setCustomValidityCustomError`  | `setCustomValidityCustomError`  | `string`                          |                | Custom help text message to display when validity = `customError`. |
 | `setCustomValidityValueMissing` | `setCustomValidityValueMissing` | `string`                          |                | Custom help text message to display when validity = `valueMissing`. |
+| `typeaheadTimeoutMs`            | `typeaheadTimeoutMs`            | `number`                          | "500"          | Sets the timeout (in milliseconds) for the typeahead search buffer.<br />After this period of inactivity, the buffer resets. Increase for users<br />who need more time between keystrokes. |
 | `validity`                      | `validity`                      | `string`                          |                | Specifies the `validityState` this element is in. |
 | `value`                         | `value`                         | `string`                          |                | Value selected for the component.                |
 
